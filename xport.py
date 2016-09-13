@@ -36,8 +36,7 @@ __all__ = ['Reader', 'DictReader',
 ######################################################################
 
 Variable = namedtuple('Variable', 'name numeric position size')
-
-
+VariableMeta = namedtuple('VariableMeta', 'Order Variable Label Type Length Format')
 
 def parse_date(timestring):
     '''
@@ -140,15 +139,25 @@ class Reader(object):
             self.created = created
             self.modified = modified
 
-            namestr_size = self._read_member_header()[-1]
+            dsname, dstype, dslabel, version, os, created, modified, namestr_size = self._read_member_header()
+
             nvars = self._read_namestr_header()
+
+            self.variableMeta = []
+
+            self.dsname = dsname
+            self.dslabel = dslabel
+            self.nvars = nvars
+
             self._variables = self._read_namestr_records(nvars, namestr_size)
 
+            records_number = len(self._variables)
+
             self._read_observations_header()
+
         except UnicodeDecodeError:
             msg = 'Expected a stream of bytes, got {stream}'
             raise TypeError(msg.format(stream=fp))
-
 
     @property
     def fields(self):
@@ -284,7 +293,10 @@ class Reader(object):
         chunks = struct.unpack(fmt, raw)
         tokens = [t.rstrip() if isinstance(t, str) else t for t in chunks]
 
-        is_numeric, _, length, number, name, label = tokens[:6]
+        is_numeric, _, length, number, name, label, nformat = tokens[:7]
+
+        self.variableMeta.append(VariableMeta(number, name, label, is_numeric, length, nformat))
+
         format_data = tokens[6:-2]
         position = tokens[-2]
 
@@ -798,3 +810,25 @@ if __name__ == '__main__':
 
 
 
+def genMetadata():
+    DatasetMetadata = namedtuple('DatasetMetadata', ['Dataset', 'Label', 'Variables', 'Records'])
+
+    fn = "e:/code/mediport/test/xptConverter/adsl.xpt"
+    with open(fn, 'rb') as fin:
+        reader = Reader(fin)
+        value = list(reader)
+
+        dsname = reader.dsname
+        dslabel = reader.dslabel
+        nvars = reader.nvars
+        records_number = len( value)
+        datasetMetadata = DatasetMetadata(dsname, dslabel, nvars, records_number)
+
+        print(datasetMetadata)
+        print(reader.variableMeta)
+        print(value)
+
+def test():
+    genMetadata()
+
+test()
